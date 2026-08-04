@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-VERSION="2.2.0"
+VERSION="2.3.0"
 
 # Claude Code honors CLAUDE_CONFIG_DIR; otherwise ~/.claude.
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
@@ -310,6 +310,23 @@ safe_rm() {
     assert_safe_path "$p" || return 1
     [ -e "$p" ] || return 0
     rm -rf -- "$p"
+}
+
+# The backup directory sits outside the Claude directory, so assert_safe_path
+# rejects it by design. Only --uninstall ever removes it, and only through this
+# check: no root, no home, no '..', and it has to resolve to a real directory.
+assert_safe_backup_dir() {
+    local p="$1" real
+    case "$p" in
+        ''|/|"$HOME") err "refused: $p"; return 1 ;;
+        *..*)         err "path contains '..': $p"; return 1 ;;
+    esac
+    [ -d "$p" ] || { err "not a directory: $p"; return 1; }
+    real=$(cd "$p" 2>/dev/null && pwd -P) || { err "path not resolvable: $p"; return 1; }
+    case "$real" in
+        /|"$HOME") err "refused: resolves to $real"; return 1 ;;
+    esac
+    return 0
 }
 
 make_backup() {
@@ -1665,6 +1682,71 @@ install_self() {
     printf '\n'
 }
 
+# Removes the installed copy — one file, nothing else. What ccmole leaves in
+# other places is named instead of being cleaned up silently: the backups
+# because they are the safety net, the switches in settings.json because they
+# are Claude Code settings by then, not ccmole state. The backups can be
+# removed along the way, but only when explicitly confirmed.
+uninstall_self() {
+    local target="$HOME/.local/bin/ccmole" answer on=0 i files=0 backups_gone=0
+
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        warn "not installed: $target"
+    else
+        printf '  Remove %s? [y/N] ' "$target"
+        read -r answer || return 1
+        case "$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')" in
+            y|yes) ;;
+            *) warn "aborted."; return 1 ;;
+        esac
+        # Unlinking the running script is safe — bash keeps the inode open.
+        if [ -L "$target" ]; then
+            rm -f "$target" || { err "could not remove $target"; return 1; }
+            ok "symlink removed: $target"
+        else
+            rm -f "$target" || { err "could not remove $target"; return 1; }
+            ok "removed: $target"
+        fi
+    fi
+
+    if [ -d "$BACKUP_DIR" ]; then
+        files=$(find "$BACKUP_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
+        printf '\n'
+        say "  Backups: $(short_path "$BACKUP_DIR" 40) — $files file(s), $(human "$(size_kb "$BACKUP_DIR")")"
+        dim "    these are the archives written before deletions and the copies"
+        dim "    of settings.json — the only way back once something is gone"
+        printf '  Remove them as well? Type %sDELETE%s to confirm, anything else keeps them: ' \
+            "$C_RED" "$C_RESET"
+        read -r answer || return 1
+        if [ "$answer" = "DELETE" ]; then
+            if assert_safe_backup_dir "$BACKUP_DIR"; then
+                if rm -rf -- "$BACKUP_DIR"; then backups_gone=1; ok "backups removed"
+                else err "could not remove $BACKUP_DIR"; fi
+            fi
+        else
+            dim "    kept — remove them later with: rm -rf \"$BACKUP_DIR\""
+        fi
+    fi
+
+    if [ -f "$SETTINGS_JSON" ] && have_python; then
+        read_privacy >/dev/null 2>&1
+        for (( i=0; i<${#V_CUR[@]}; i++ )); do [ "${V_CUR[$i]}" = "1" ] && on=$((on+1)); done
+        if [ "$on" -gt 0 ]; then
+            printf '\n'
+            say "  $on privacy switch(es) stay set in $(short_path "$SETTINGS_JSON" 40)"
+            dim "    they are Claude Code settings now, not ccmole state"
+            if [ "$backups_gone" = "1" ]; then
+                dim "    to undo them, edit settings.json by hand — the copies are gone"
+            else
+                dim "    to undo: clear them on the privacy screen before uninstalling,"
+                dim "    or restore a settings-*.json from the backup directory"
+            fi
+        fi
+    fi
+    printf '\n'
+    return 0
+}
+
 # ── Self-test ────────────────────────────────────────────────────────────────
 
 selftest() {
@@ -1783,6 +1865,7 @@ ccmole $VERSION — interactive cleanup tool for Claude Code
   ccmole --status     print an overview and exit
   ccmole --dry-run    show the deletion plan for all projects (deletes nothing)
   ccmole --install    install to ~/.local/bin/ccmole
+  ccmole --uninstall  remove that copy again, backups optional
   ccmole --selftest   check the platform assumptions (deletes nothing)
   ccmole --version    version
   ccmole --help       this help
@@ -1812,10 +1895,11 @@ main() {
     setup_charset
 
     case "${1:-}" in
-        -h|--help)  usage; exit 0 ;;
-        --version)  printf 'ccmole %s\n' "$VERSION"; exit 0 ;;
-        --install)  install_self; exit $? ;;
-        --selftest) selftest; exit $? ;;
+        -h|--help)   usage; exit 0 ;;
+        --version)   printf 'ccmole %s\n' "$VERSION"; exit 0 ;;
+        --install)   install_self; exit $? ;;
+        --uninstall) uninstall_self; exit $? ;;
+        --selftest)  selftest; exit $? ;;
     esac
 
     if ! command -v claude >/dev/null 2>&1; then

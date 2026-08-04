@@ -8,7 +8,7 @@ Claude Code stores its data under `~/.claude` and only cleans up so much of it.
 reachable without having to remember paths and session IDs.
 
 ```
-╭─ ccmole 2.2.0 ───────────────────────────────────────╮
+╭─ ccmole 2.3.0 ───────────────────────────────────────╮
 │  ~/.claude   250 MB   2829 files                     │
 ╰──────────────────────────────────────────────────────╯
 
@@ -118,10 +118,17 @@ ccmole              start interactively
 ccmole --status     print an overview and exit
 ccmole --dry-run    show the deletion plan for all projects
 ccmole --install    install to ~/.local/bin/ccmole
+ccmole --uninstall  remove that copy again, backups optional
 ccmole --selftest   check the platform assumptions
 ccmole --version    version
 ccmole --help       help
 ```
+
+`--uninstall` removes exactly one file, the copy in `~/.local/bin`. It then
+names what it does not touch on its own: the backups in `~/.claude-backups` and
+the switches written to `settings.json`, which are Claude Code settings by then
+rather than ccmole state. The backups can be removed in the same run, but only
+after typing `DELETE`.
 
 ## Environment variables
 
