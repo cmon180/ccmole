@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-VERSION="2.3.0"
+VERSION="2.3.1"
 
 # Claude Code honors CLAUDE_CONFIG_DIR; otherwise ~/.claude.
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
@@ -1364,9 +1364,10 @@ privacy_screen() {
             space|enter)
                 if [ "${V_SEL[$CURSOR]}" = "1" ]; then V_SEL[$CURSOR]=0; else V_SEL[$CURSOR]=1; fi
                 [ "$key" = "space" ] && nav down "$n" "$vis" ;;
-            S) for (( i=0; i<n; i++ )); do
+            s|S) # lowercase too — the junk screen uses s for the same gesture
+                for (( i=0; i<n; i++ )); do
                    [ -z "${V_WARN[$i]}" ] && V_SEL[$i]=1
-               done ;;
+                done ;;
             n) for (( i=0; i<n; i++ )); do V_SEL[$i]=0; done ;;
             w) show_cursor; privacy_apply; hide_cursor; clear_screen ;;
             *) ;;
