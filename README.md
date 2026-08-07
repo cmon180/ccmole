@@ -8,7 +8,7 @@ Claude Code stores its data under `~/.claude` and only cleans up so much of it.
 reachable without having to remember paths and session IDs.
 
 ```
-╭─ ccmole 2.3.0 ───────────────────────────────────────╮
+╭─ ccmole 2.3.2 ───────────────────────────────────────╮
 │  ~/.claude   250 MB   2829 files                     │
 ╰──────────────────────────────────────────────────────╯
 

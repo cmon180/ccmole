@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-VERSION="2.3.1"
+VERSION="2.3.2"
 
 # Claude Code honors CLAUDE_CONFIG_DIR; otherwise ~/.claude.
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
@@ -549,10 +549,15 @@ TOP=0       # first visible row (scroll offset)
 # How many list rows fit on the terminal?
 # Head = frame (3) + blank line + category bars + blank line.
 # $1 = rows the screen needs on top of that for its table header and footer.
+#
+# The last line stays empty on purpose. Every row is printed with a trailing
+# newline, so filling the screen right to the bottom moves the cursor past the
+# last line and scrolls everything up by one — after which the redraw from
+# \033[H lands one line off and the whole frame walks up the screen.
 viewport() {
     local extra="${1:-9}" head v
     head=$(( 5 + OV_COUNT ))
-    v=$(( ROWS - head - extra ))
+    v=$(( ROWS - head - extra - 1 ))
     [ "$v" -lt 3 ] && v=3
     printf '%d' "$v"
 }
@@ -586,6 +591,19 @@ nav() {
 }
 
 reset_nav() { CURSOR=0; TOP=0; }
+
+# nav() only pushes TOP when the cursor leaves the visible range, so it never
+# pulls it back when the range grows. Enlarging the terminal would leave the
+# old offset in place: rows missing at the top, empty rows at the bottom, and
+# the list only creeping back one row per keypress. Called once per frame,
+# after vis is known.
+clamp_top() {
+    local n="$1" vis="$2" max
+    max=$(( n - vis ))
+    [ "$max" -lt 0 ] && max=0
+    [ "$TOP" -gt "$max" ] && TOP="$max"
+    [ "$TOP" -lt 0 ] && TOP=0
+}
 
 # Shows "↑ 3 more" / "↓ 5 more" above and below the list.
 scroll_hint() {
@@ -672,6 +690,7 @@ projects_screen() {
         n=${#P_DIR[@]}
         vis=$(viewport 10)
         [ "$vis" -gt "$n" ] && [ "$n" -gt 0 ] && vis="$n"
+        clamp_top "$n" "$vis"
 
         home
         overview
@@ -954,6 +973,7 @@ junk_screen() {
         n=${#J_PATH[@]}
         vis=$(viewport 11)
         [ "$vis" -gt "$n" ] && [ "$n" -gt 0 ] && vis="$n"
+        clamp_top "$n" "$vis"
 
         home
         overview
@@ -1317,6 +1337,7 @@ privacy_screen() {
         n=${#V_KEY[@]}
         vis=$(viewport_plain 16)
         [ "$vis" -gt "$n" ] && vis="$n"
+        clamp_top "$n" "$vis"
 
         home
         # No storage overview here — the space belongs to the list.
