@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+._*
+
+# Linux
+*~
+.directory
+.Trash-*
+.fuse_hidden*
+.nfs*
+
+# Windows (Zugriff via Samba)
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
